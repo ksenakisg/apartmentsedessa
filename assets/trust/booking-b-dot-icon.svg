@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 84 48" fill="none" role="img" aria-labelledby="bookingMarkTitle">
+  <title id="bookingMarkTitle">Booking.com</title>
+  <!-- Single mark: navy B + integrated accent dot (no outer tile) -->
+  <text
+    x="2"
+    y="36"
+    fill="#003580"
+    font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="34"
+    font-weight="800"
+    letter-spacing="-0.03em"
+  >
+    B
+  </text>
+  <!-- Period-style dot: inline after B, bottom aligned with text baseline (y=36) -->
+  <circle cx="34.35" cy="30.65" r="5.35" fill="#5392f9" />
+</svg>
