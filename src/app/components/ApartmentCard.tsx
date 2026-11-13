@@ -1,0 +1,220 @@
+"use client";
+
+import Image from "next/image";
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
+import { motion } from "framer-motion";
+import { getWhatsAppUrl } from "../lib/contact";
+import { useLang } from "../context/LanguageContext";
+import { t, tr } from "../data/translations";
+
+const Lightbox = lazy(() => import("./Lightbox"));
+
+export type ApartmentKey = "ap1" | "ap2" | "ap3" | "ap4";
+
+export interface Apartment {
+  id: number;
+  apKey: ApartmentKey;
+  title: string;
+  images: string[];
+  priority?: boolean;
+}
+
+// ─── Carousel ────────────────────────────────────────────────────────────────
+
+function Carousel({
+  images,
+  title,
+  priority,
+}: {
+  images: string[];
+  title: string;
+  priority?: boolean;
+}) {
+  const [current, setCurrent] = useState(0);
+  const [loaded, setLoaded] = useState<boolean[]>(() => images.map(() => false));
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [hovered, setHovered] = useState(false);
+
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const n = images.length;
+
+  const goTo = useCallback((index: number) => setCurrent((index + n) % n), [n]);
+  const prev = (e: React.MouseEvent) => { e.stopPropagation(); goTo(current - 1); };
+  const next = (e: React.MouseEvent) => { e.stopPropagation(); goTo(current + 1); };
+
+  const markLoaded = (i: number) =>
+    setLoaded((prev) => { const c = [...prev]; c[i] = true; return c; });
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) dx < 0 ? goTo(current + 1) : goTo(current - 1);
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
+
+  const single = n <= 1;
+
+  return (
+    <>
+      <div
+        role="button"
+        tabIndex={n > 0 ? 0 : -1}
+        aria-label={`Άνοιγμα γκαλερί: ${title}`}
+        className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-[#FFFDF9] select-none cursor-zoom-in"
+        onClick={() => n > 0 && setLightboxIndex(current)}
+        onKeyDown={(e) => e.key === "Enter" && n > 0 && setLightboxIndex(current)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onTouchStart={single ? undefined : onTouchStart}
+        onTouchEnd={single ? undefined : onTouchEnd}
+      >
+        {n === 0 ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1} className="w-10 h-10 text-[#B8AEA1]">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 15l-5-5L5 21" />
+            </svg>
+            <span className="text-xs text-[#B8AEA1]">Δεν βρέθηκαν φωτογραφίες</span>
+          </div>
+        ) : (
+          <>
+            {images.map((src, i) => (
+              <div
+                key={src}
+                className={[
+                  "absolute inset-0 transition-opacity duration-300",
+                  i === current ? "opacity-100 z-10" : "opacity-0 z-0",
+                ].join(" ")}
+              >
+                {!loaded[i] && <div className="absolute inset-0 bg-[#EDE6DD] animate-pulse" />}
+                {/* Zoom wrapper — scale driven by hovered state via CSS transition */}
+                <div
+                  className="absolute inset-0 transition-transform duration-500 ease-out"
+                  style={{ transform: hovered ? "scale(1.06)" : "scale(1)" }}
+                >
+                  <Image
+                    src={src}
+                    alt={`${title} — φωτογραφία ${i + 1}`}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                    priority={priority && i === 0}
+                    onLoad={() => markLoaded(i)}
+                  />
+                </div>
+              </div>
+            ))}
+
+            {!single && (
+              <>
+                <button
+                  onClick={prev}
+                  aria-label="Προηγούμενη φωτογραφία"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-[#2B302A]/10 text-[#2B302A] hover:bg-[#2B302A]/15 transition-colors backdrop-blur-sm"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button
+                  onClick={next}
+                  aria-label="Επόμενη φωτογραφία"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-[#2B302A]/10 text-[#2B302A] hover:bg-[#2B302A]/15 transition-colors backdrop-blur-sm"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+
+                <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded-full bg-[#2B302A]/10 text-[#2B302A] text-xs font-medium backdrop-blur-sm tabular-nums">
+                  {current + 1}/{n}
+                </span>
+
+                <div className="absolute bottom-2.5 inset-x-0 z-20 flex justify-center gap-1.5">
+                  {images.slice(0, 8).map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={(e) => { e.stopPropagation(); goTo(i); }}
+                      aria-label={`Φωτογραφία ${i + 1}`}
+                      className={[
+                        "rounded-full transition-all duration-200",
+                        i === current ? "w-4 h-1.5 bg-[#B86B4B]/80" : "w-1.5 h-1.5 bg-[#2B302A]/20 hover:bg-[#B86B4B]/60",
+                      ].join(" ")}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
+
+      {lightboxIndex !== null && (
+        <Suspense fallback={null}>
+          <Lightbox
+            images={images}
+            title={title}
+            startIndex={lightboxIndex}
+            onClose={() => setLightboxIndex(null)}
+          />
+        </Suspense>
+      )}
+    </>
+  );
+}
+
+// ─── Card ─────────────────────────────────────────────────────────────────────
+
+export default function ApartmentCard({ apt }: { apt: Apartment }) {
+  const { lang } = useLang();
+
+  const specs = t.specs[apt.apKey];
+  const whatsappHref = getWhatsAppUrl(apt.title, lang);
+  const guestsBadge = tr(specs.guests, lang).toUpperCase();
+  const details = `${tr(specs.rooms, lang)} • ${tr(specs.view, lang)}`;
+
+  return (
+    <motion.article
+      className="bg-[#FFFDF9] rounded-2xl overflow-hidden border border-[#E5E0D8] flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-md"
+      initial={{ opacity: 0, y: 32 }}
+      whileInView={{ opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] } }}
+      viewport={{ once: true, amount: 0.15 }}
+    >
+      <Carousel images={apt.images} title={apt.title} priority={apt.priority} />
+
+      <div className="flex flex-col flex-1 p-4 gap-4">
+        <div>
+          <h2 className="font-serif text-[#1F2421] text-base leading-snug">{apt.title}</h2>
+          <span className="mt-1 inline-block text-[11px] tracking-[0.22em] uppercase font-semibold text-[#B86B4B]">
+            {guestsBadge}
+          </span>
+          <p className="mt-3 text-sm font-sans text-[#7A7A7A]">
+            {details}
+          </p>
+        </div>
+
+        <div className="mt-auto flex items-center justify-center pt-1">
+          <motion.a
+            href={whatsappHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Book this"
+            className="inline-flex items-center justify-center text-sm font-semibold text-[#1F2421] hover:text-[#B86B4B] transition-colors"
+            whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            Book this →
+          </motion.a>
+        </div>
+      </div>
+    </motion.article>
+  );
+}
